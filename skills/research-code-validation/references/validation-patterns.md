@@ -1,6 +1,6 @@
 # Validation patterns
 
-Use only the sections relevant to the current pipeline. The policies below adapt the source note into operational guidance; the linked documentation supports language and framework behavior, not a universal guarantee of experimental correctness.
+Use relevant sections only.
 
 ## Contents
 
@@ -13,17 +13,17 @@ Use only the sections relevant to the current pipeline. The policies below adapt
 
 ## Boundary checks
 
-Check semantic contracts as well as tensor dimensions. A valid shape does not establish that images and actions are time-aligned, joint arrays use the same order, or poses use the same coordinate frame.
+Validate shapes and semantics:
 
 | Boundary | Example checks |
 | --- | --- |
-| Dataset to model | Nonempty splits; no unintended train/eval overlap; matching sample IDs and timestamps; expected channel order, normalization, mask meaning, and label domain. |
-| Policy to simulator/controller | Joint order, action meaning and units, reference frame, control rate/decimation, finite state, and correct termination/truncation handling. |
-| Loss to optimizer | Scalar reduction and nonempty valid denominator; finite objective; gradients on intended parameters; intended optimizer parameter groups. |
-| Checkpoint to runner | Compatible model/config/data identity; complete requested resume state; explicit distinction between resuming and initializing a new run from weights. |
-| Runner to metrics | Correct planned/completed/failed counts; aggregation weights; visible worker errors; matching comparison configuration. |
+| Dataset to model | Nonempty splits. No unintended train/eval overlap. Matching sample IDs/timestamps. Time-aligned images/actions. Channel order, normalization, mask meaning, label domain. |
+| Policy to simulator/controller | Joint order, action meaning/units, coordinate frame, control rate/decimation, finite state, termination/truncation handling. |
+| Loss to optimizer | Scalar, finite objective. Nonempty valid denominator. Intended optimizer parameter groups. |
+| Checkpoint to runner | Compatible model/config/data identity. Requested resume state. |
+| Runner to metrics | Planned/completed/failed counts. Aggregation weights. Visible worker errors. Matching comparison config. |
 
-Use an explicit exception for a required runtime contract, for example:
+Reject runtime contract violations with exceptions:
 
 ```python
 if prediction.shape != target.shape:
@@ -32,24 +32,25 @@ if prediction.shape != target.shape:
     )
 ```
 
-Use this only when the objective requires matching shapes; classification logits and class-index labels normally have different shapes. Python's [`assert` statement](https://docs.python.org/3/reference/simple_stmts.html#the-assert-statement) is removed under optimization. Do not depend on it to reject invalid experiments.
+Use this example only for objectives with matching shapes. Classification logits and class-index labels normally have different shapes. Avoid Python's [`assert` statement](https://docs.python.org/3/reference/simple_stmts.html#the-assert-statement) for runtime contracts. Optimization removes it.
 
 ## Loss and gradient diagnostics
 
 ### Initial loss
 
-Derive the expectation from the implemented objective, target distribution, weighting, masking, reduction, and initialization.
+Derive baselines from the objective, target distribution, initialization, weighting, smoothing, masking, ignored entries, reduction, and regularization. Reject empty reductions unless the algorithm defines them.
 
-- For ordinary unweighted cross-entropy with normalized targets and exactly uniform predictions over `C` classes, the per-example loss is `log(C)`. Randomly initialized logits are not necessarily uniform. Use this as a controlled baseline or sanity range, not an exact assertion for every random network.
-- Account for class weighting, smoothing, reduction, ignored entries, and regularization before comparing losses. With no valid entries, reject the reduction unless the algorithm explicitly defines that case.
-- For regression, diffusion, or flow matching, derive a baseline from target scaling and the actual prediction target. Fix noise and timesteps for a diagnostic when their resampling would obscure the result.
-- For RL, inspect component rewards, bootstrapping, masks, returns, and a known small transition sequence. A policy-gradient loss need not be positive, monotonic, or converge to zero.
+| Objective | Diagnostic |
+| --- | --- |
+| Cross-entropy | Unweighted loss with normalized targets and uniform predictions over `C` classes: `log(C)` per example. Controlled baseline only. Random logits can differ. |
+| Regression, diffusion, flow matching | Target scaling and the prediction target. Fixed noise/timesteps if resampling obscures diagnostics. |
+| RL | Component rewards, bootstrapping, masks, returns, and a known short transition sequence. No positive, monotonic, or zero-loss requirement for policy gradients. |
 
-The [`CrossEntropyLoss` contract](https://docs.pytorch.org/docs/2.9/generated/torch.nn.CrossEntropyLoss.html) defines supported target shapes and reductions. Do not assume its soft-target interface validates every probability constraint for you.
+The [`CrossEntropyLoss` contract](https://docs.pytorch.org/docs/2.9/generated/torch.nn.CrossEntropyLoss.html) defines target shapes and reductions. Validate soft-target probability constraints yourself.
 
 ### Ordinary PyTorch update
 
-Adapt this fragment to an existing training step. It illustrates an unscaled, dense-gradient diagnostic; it is not a generic trainer or an AMP/distributed implementation.
+Adapt this unscaled, dense-gradient diagnostic to the existing training step. It is not a trainer or AMP/distributed implementation.
 
 ```python
 optimizer.zero_grad(set_to_none=True)
@@ -63,50 +64,63 @@ for name, parameter in model.named_parameters():
 optimizer.step()
 ```
 
-In the diagnostic case, also verify that the intended parameters receive gradients and actually update. A missing gradient may be correct for a frozen or conditional branch; check the known contract rather than requiring every parameter to update on every batch. Handle sparse gradients with the appropriate value representation. Do not apply dense-gradient code blindly.
+Frozen or conditional branches can lack gradients per batch. For sparse gradients, examine the appropriate value representation.
 
 ### Mixed precision and distributed execution
 
-Follow the installed framework's [AMP procedure](https://docs.pytorch.org/docs/2.9/notes/amp_examples.html): scale the loss, backpropagate, and unscale before gradient inspection or clipping. When accumulating gradients, unscale once after all microbatches for that optimizer update; do not mix scaled and unscaled gradients during accumulation.
+Follow the installed framework's [AMP procedure](https://docs.pytorch.org/docs/2.9/notes/amp_examples.html):
 
-`GradScaler.step()` can intentionally skip an update containing nonfinite gradients while the scale adapts. Record overflow/skipped-update counts and actual optimizer-update counts; do not advance update-based schedules as though a skipped update happened. Use an explicit diagnostic policy for persistent overflow or lack of progress. A nonfinite forward loss still requires investigation; do not sanitize it to force a step.
+1. Scale the loss.
+2. Backpropagate.
+3. Unscale before gradient examination or clipping.
 
-In distributed training, use the runner's error propagation and whole-job termination behavior. Do not assume a rank-local exception ends the other ranks, and do not introduce a new collective into an exception path after peers may have exited. Exercise the failure path in a bounded multi-worker test when changing it.
+For accumulation, unscale once per optimizer update after all microbatches. Do not mix scaled and unscaled gradients.
+
+`GradScaler.step()` can skip updates with nonfinite gradients as the scale adapts. Record overflow, skipped updates, and actual optimizer updates. Do not advance update-based schedules for skipped updates. Define a diagnostic policy for persistent overflow or no progress. Investigate nonfinite forward losses. Do not sanitize losses to force updates.
+
+Rank-local exceptions might leave peers active. Do not add exception-path collectives after peers might exit. After failure-path changes, run a bounded multi-worker test.
 
 ## Tiny-problem and reproducibility checks
 
-For supervised learning, use a fixed small dataset and controlled stochasticity. Temporarily remove augmentation and regularization only in the isolated diagnostic configuration, then restore the intended experiment settings. Seek the known attainable loss or clear fitting behavior. Investigate failure before scaling; do not declare every failure proof of a bug when capacity, objective, or optimization can explain it.
+For supervised diagnostics, control stochasticity on fixed small datasets. Disable augmentation/regularization only within diagnostics. Restore experiment settings afterward. Seek known attainable loss or clear fitting. Before scaling, investigate failures, including capacity, objective, and optimization limits.
 
-For diffusion or flow matching, a fixed-noise diagnostic tests a narrower path than training over resampled noise. Keep that limitation visible. For RL, use known reward/termination cases and a short bounded learning task or rollout; do not use a universal loss-to-zero requirement. The [policy-gradient explanation](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html) distinguishes fixed-batch optimization loss from expected return.
+Fixed-noise diagnostics cover less than resampled diffusion or flow matching. State this limitation. For RL, use known reward/termination cases and short, bounded learning tasks or rollouts. The [policy-gradient explanation](https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html) separates fixed-batch loss and expected return.
 
-Pin the code, data order, worker seeding, software, device, and relevant deterministic settings for a repeatability check. Seed every RNG actually used, including independent NumPy generators and the simulator. Compare the first divergence in inputs, outputs, loss, or updates before demanding matching long learning curves. PyTorch documents [limits to reproducibility](https://docs.pytorch.org/docs/2.9/notes/randomness.html) across releases, platforms, and CPU/GPU execution. Use numerical tolerances or repeated-seed statistics appropriate to the comparison.
+Pin code, data order, worker seeding, software, device, and deterministic settings. Seed every RNG, including independent NumPy generators and simulators. Compare the first divergence in inputs, outputs, loss, or updates before comparing long learning curves. PyTorch's [limits to reproducibility](https://docs.pytorch.org/docs/2.9/notes/randomness.html) cover releases, platforms, and CPU/GPU execution. Matching seeds across backends do not establish identical trajectories.
 
-When timing frameworks, keep diagnostic settings explicit. Host reads of accelerator tensors and exhaustive checks can change throughput; use equivalent validation modes and document any limitations in correctness coverage. Do not treat matching seeds across different backends as evidence of identical trajectories.
+For framework timing, state diagnostic settings and correctness limits. Accelerator-tensor host reads and exhaustive checks can affect throughput.
 
 ## Evaluation accounting
 
-Establish the episode set, seeds, metric, and recovery/exclusion rules before evaluating.
+Predefine episodes, seeds, metrics, and recovery/exclusion rules.
 
-Suppose 100 episodes are planned, 80 complete, and 20 crash. If 60 completed episodes succeed, `60 / 80 = 75%` describes only the completed subset. It is not a complete benchmark result.
+Example: 100 planned episodes, 80 complete, 20 crash, 60 succeed. `60 / 80 = 75%` describes only completed episodes.
 
-- If the 20 events are policy failures under the protocol, include them as failures: `60 / 100 = 60%`.
-- If they are infrastructure failures, retain their IDs and mark the evaluation incomplete. Apply only the predefined retry policy to the same cases. Do not replace them with fresh seeds or easier episodes.
-- If a protocol permits exclusions, report the reasons, excluded counts, and denominator explicitly. A low exclusion rate alone does not establish absence of bias.
-- Record attempts separately from final episode outcomes so retries do not double-count success. Keep zero completed episodes undefined or failed, never a fabricated zero or perfect score.
+- For policy failures, count crashes as failures: `60 / 100 = 60%`.
+- For infrastructure failures, retain IDs. Mark evaluation incomplete. Retry the same cases under predefined rules. Do not substitute fresh seeds or easier episodes.
+- For permitted exclusions, report reasons, counts, and denominators. Low exclusion rates do not establish absence of bias.
+- Record attempts separately from final outcomes to avoid duplicate successes. Zero completed episodes means undefined or failed results, never zero or perfect scores.
 
-This accounting policy follows the definition of the chosen metric. Use the same policy for every compared method. The official [MLQA evaluator](https://github.com/facebookresearch/MLQA/blob/main/mlqa_evaluation_v1.py) provides one concrete example: missing predictions remain in its denominator and contribute zero. Do not generalize that penalty to arbitrary metrics; a zero loss would reward a failed loss computation.
+Follow the metric's definition consistently across methods. The [MLQA evaluator](https://github.com/facebookresearch/MLQA/blob/main/mlqa_evaluation_v1.py) retains missing predictions in its denominator with zero contributions. Do not generalize this penalty: zero loss rewards failed loss computation.
 
 ## Recovery and checkpointing
 
-Keep compute exceptions outside transient-I/O retry scopes. Retry only an operation whose identity and side effects are understood. A timeout after an acknowledged or partially completed write may need an idempotency check before another attempt.
+Keep compute exceptions outside transient-I/O retries. Retry only operations with known identity and side effects. After acknowledged or partial writes time out, assess idempotency before retries.
 
-For local checkpoint files, write a temporary file in the destination filesystem, finish and validate the write as appropriate, then publish it through the storage backend's supported atomic operation. Retain the prior valid checkpoint on failure. Python documents [`os.replace`](https://docs.python.org/3/library/os.html#os.replace) as atomic when successful and warns that moves across filesystems can fail; atomic publication is not itself a guarantee of power-loss durability or remote-object-store semantics.
+For local checkpoints:
 
-For a full training resume, restore the model, optimizer, scheduler, scaler when used, RNGs, step counters, and relevant sampler/environment state supported by the pipeline. If exact continuation is unsupported, label the limitation; weight initialization is a new run, not a full resume. Run smoke checks in separate state so testing does not advance or overwrite the real checkpoint.
+1. Write a temporary file in the destination filesystem.
+2. Finish the write.
+3. Validate the write as appropriate.
+4. Publish through the backend's supported atomic operation.
 
-Use the existing scheduler/runner for retries with finite attempt and time budgets. Preserve the failing command, traceback, exit status, and checkpoint lineage. Never report a failed or partially saved run as complete.
+On failure, retain the previous valid checkpoint. Successful [`os.replace`](https://docs.python.org/3/library/os.html#os.replace) is atomic, but cross-filesystem moves can fail. Atomic publication guarantees neither power-loss durability nor remote-object-store semantics.
+
+For full resumes, restore model, optimizer, scheduler, scaler when used, RNGs, step counters, and supported sampler/environment state. State any limits to exact continuation. Weight initialization starts a new run.
+
+Use the existing scheduler/runner with finite retry attempt/time budgets.
 
 ## Sources
 
-- Source policy: [Best Practice on Error Handling in Research Code](https://app.notion.com/p/tk233/Best-Practice-on-Error-Handling-in-Research-Code-3c3f0df2b51280a695d1e10da7dce2f5). Access may require the author's Notion workspace; the skill is self-contained.
-- Language/framework references are linked beside the relevant behavior. Verify the installed version before using version-sensitive APIs.
+- Source policy: [Best Practice on Error Handling in Research Code](https://app.notion.com/p/tk233/Best-Practice-on-Error-Handling-in-Research-Code-3c3f0df2b51280a695d1e10da7dce2f5). Access may depend on the author's Notion workspace. This skill is self-contained.
+- References appear beside behavior. Validate installed versions before version-sensitive API use.

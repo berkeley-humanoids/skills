@@ -1,67 +1,67 @@
 ---
 name: research-code-validation
-description: Preserve experimental validity with early checks, visible failures, and staged validation. Use when building, modifying, reviewing, or debugging ML/RL training frameworks, data pipelines, simulation environments, losses, checkpointing, or evaluation code; before launching, resuming, or scaling training and evaluation runs; and when investigating NaNs, silent fallbacks, or misleading metrics. Do not apply to unrelated application builds, formatting-only edits, or general ML explanations.
+description: Validate ML/RL research code before expensive runs. Use when building, changing, reviewing, or debugging training frameworks, data pipelines, simulation environments, losses, checkpoints, or evaluation. Use before training/evaluation launch, resume, or scale-up, and for NaNs, silent fallbacks, or suspect metrics. Exclude unrelated application builds, formatting-only edits, and general ML explanations.
 ---
 
 # Research Code Validation
 
-Make invalid experiments fail visibly before they consume substantial compute or produce trusted results. Detect broken assumptions close to their source. Recover only when the operation has a defined recovery contract that preserves the experiment.
+Stop invalid experiments early. Recover only through a defined procedure that preserves the experiment.
 
 ## Scope the work
 
-- Read the project's instructions, entry point, resolved configuration, and relevant tests. Identify the actual objective, backend, data, and requested run budget before choosing checks.
-- For implementation or review, inspect the changed path and its boundaries. Add the smallest checks and targeted verification needed for concrete failure modes. Do not refactor unrelated code or launch a full experiment just to validate an edit.
-- For a launch or resume, reuse relevant passing checks for the same code, configuration, data, and environment. Repeat checks invalidated by a change; do not repeat a whole validation ladder for every command.
-- Keep smoke runs isolated from reported experiments: use separate outputs and state, then start the requested run from its intended initialization or checkpoint.
-- Follow existing coding conventions. Reuse validators and the project's runner. Do not introduce a generic validation framework or new configuration surface without a current need.
+- Read project instructions, the entry point, resolved configuration, and relevant tests. Identify the objective, data, backend, and run budget.
+- Limit edits and checks to concrete failure modes. Reuse existing validators and runners. Avoid unrelated refactors, speculative abstractions, and full experiments for code review.
+- Reuse passing checks when code, configuration, data, and environment remain unchanged. Repeat checks that a change invalidates.
+- Keep smoke-test outputs and state separate. Start the experiment from its intended initialization or checkpoint.
 
 ## Preserve failure information
 
-- Let unexpected exceptions propagate with their traceback and a nonzero job status. Do not convert them into default tensors, zero losses, fake successes, skipped batches, or silent CPU/backend fallbacks.
-- Validate at boundaries where invalid state can enter: config parsing, data decoding, transformations, model/loss interfaces, simulator transitions, checkpoint restore, and metric aggregation. Do not repeat checks for states already guaranteed internally.
-- Use explicit exceptions for required runtime checks. In Python, `assert` can disappear under `-O`; reserve it for tests and optional debugging assertions.
-- Catch a specific exception only to perform a defined recovery, add useful context while preserving its cause, or clean up and re-raise. Avoid redundant catch-and-rethrow layers and repeated logging of the same traceback.
-- Treat clipping, masking, `nan_to_num`, reset-on-error, and sample filtering as algorithm or protocol choices. Do not add them merely to make a broken run finish.
-- Preserve the originating step, sample/episode ID, rank, expected contract, and observed value or summary. Keep cleanup from replacing the original error. Ensure a fatal worker error reaches the launcher instead of leaving peers running or blocked.
+- Validate inputs at actual boundaries. Avoid duplicate checks for guaranteed internal states.
+- Let unexpected exceptions retain their traceback and nonzero job status. Never replace failures with defaults, zero losses, skipped samples, or silent backend changes.
+- Raise explicit exceptions for required checks. Python can remove `assert` under `-O`.
+- Catch specific exceptions only for defined recovery, useful context, or cleanup. Preserve the original cause. Avoid redundant wrappers and logs.
+- Record the step, sample/episode ID, rank, expected contract, and observed value. Make fatal worker errors stop the whole job.
+- Treat clipping, masking, `nan_to_num`, reset-on-error, and filtering as explicit algorithm or protocol choices.
 
 ## Validate before scaling
 
-Run the cheapest relevant checks first. Use the project's existing commands and suitable equivalents for its framework.
+Run the cheapest relevant checks first:
 
 | Stage | Evidence to obtain |
 | --- | --- |
-| Entry checks | Reject invalid or ignored config options; validate data/assets, splits, checkpoint compatibility, output location, requested device/backend/precision, and meaningful hyperparameter constraints. Resolve imports and any required build before a long run. |
-| One batch or rollout | Inspect real inputs and outputs through the actual preprocessing and model/environment path. Check shape, dtype, device, finite values, masks, ranges, units, frames, and temporal alignment where applicable. Visualize a representative sample when tensor checks cannot establish its meaning. |
-| Objective and update | Check the initial objective against a justified baseline, finite loss, intended gradient flow, and an actual optimizer update. For RL, check reward components, actions, reset behavior, and termination versus truncation. |
-| Tiny problem | For a suitable supervised objective, fit a fixed small batch with controlled randomness and regularization. For RL or stochastic objectives, use a small task, fixed rollout, or fixed-noise diagnostic with a stated expected result. Do not require every objective to reach zero. |
-| Short end-to-end run | Exercise the real runner, logging, evaluation accounting, and checkpoint save/load. Exercise resume and multiple workers when those paths are part of the requested run or change. Record what was actually tested. |
-| Scale-up | Start the authorized run only after applicable checks pass. Gate expensive closed-loop or hardware evaluation on relevant cheaper checks. A passing smoke test establishes basic validity, not convergence or scientific correctness. |
+| Entry checks | Validate configuration, data/assets, splits, outputs, checkpoint compatibility, device/backend/precision, and hyperparameters. Reject ignored options. Resolve imports and builds. |
+| One batch or rollout | Run actual preprocessing and inference or simulation. Validate shapes, dtypes, devices, finite values, masks, ranges, units, frames, and timing. Visualize ambiguous data. |
+| Objective and update | Validate the initial-loss baseline, gradient flow, and optimizer update. For RL, validate rewards, actions, resets, termination, and truncation. |
+| Tiny problem | For supervised learning, fit a fixed batch with controlled randomness and regularization. For other objectives, use a controlled task, rollout, or noise sample. Set an objective-specific target. Zero is not universal. |
+| Short end-to-end run | Exercise the real runner, logging, evaluation accounting, and checkpoint save/load. Test resume and workers when relevant. |
+| Scale-up | Run authorized experiments after applicable checks pass. Complete cheaper checks before expensive closed-loop or hardware evaluation. Smoke tests do not prove convergence or correctness. |
 
-For objective baselines, PyTorch examples, reproducibility, and recovery details, read [validation patterns](references/validation-patterns.md) as needed.
+Read [validation patterns](references/validation-patterns.md) for contracts, numerical checks, reproducibility, and recovery details.
 
 ## Keep runtime checks meaningful
 
-- Keep required boundary and finite-loss checks active in full runs. Verify ordinary gradients before an update; for mixed precision, inspect unscaled gradients and follow the framework's recorded overflow/step-skipping protocol. Do not replace AMP's defined behavior with arbitrary batch skipping.
-- Check that intended trainable parameters receive gradients and update in the diagnostic case; account for intentionally frozen or conditionally unused parameters. Validate checkpoint state before trusting a resume.
-- Use exhaustive tensor inspection, anomaly detection, deterministic debug settings, and expensive visualizations for bounded diagnosis. Measure their cost before retaining them everywhere; per-tensor host synchronization can distort throughput.
-- Record the validation mode used for performance measurements and keep it comparable across systems. Do not silently disable correctness checks to improve a benchmark.
-- Reproduce a bounded case in a pinned software/hardware setup with controlled RNGs. Use justified numerical tolerances where exact equality is unsupported. Do not demand identical learning curves across hardware, framework versions, or nondeterministic simulators.
+- Keep required boundary and finite-loss checks active. Validate ordinary gradients before updates. For AMP, inspect unscaled gradients and preserve recorded overflow recovery.
+- Validate intended parameter updates in diagnostics. Allow frozen or conditionally unused parameters. Validate checkpoint state before resume.
+- Limit exhaustive checks and expensive diagnostics to bounded runs. Measure their cost. Use and record comparable validation modes in benchmarks.
+- Repeat a bounded case with controlled RNGs in a pinned setup. Use justified tolerances or repeated-seed statistics. Matching seeds do not guarantee identical curves across systems.
 
 ## Recover only under a defined contract
 
 | Event | Required behavior |
 | --- | --- |
-| Invalid config, corrupt sample, shape error, nonfinite forward loss, or unexpected simulator failure | Stop and expose the cause. Fix the source or establish an explicit, versioned data/protocol change before rerunning. |
-| Expected transient I/O failure | Retry only the specified exception/status, with a timeout, bounded backoff, and attempt logs. Preserve request/data identity and ensure retries cannot duplicate side effects. Exhaustion remains a failure. |
-| Checkpoint write failure | Retry or use an explicit, reported fallback destination. Preserve the last valid checkpoint; never mark an incomplete write as resumable or silently report a successful save. |
-| Evaluation failure | Retain the planned episode/sample and its outcome. Count policy/task failures under the metric's rules. Treat infrastructure failures as incomplete evaluation unless a predefined protocol handles them; never average only surviving episodes and present that as the full score. |
-| OOM, backend fallback, or reduced workload | Report the failing configuration. Treat changed batch size, precision, backend, environment count, or data selection as an explicit new configuration; never silently substitute it in a comparison. |
-| Normal episode termination or documented AMP overflow | Apply the algorithm/framework's intended behavior and record relevant counts. Distinguish these events from corrupted state or unexpected exceptions. |
+| Invalid configuration/data, shape error, nonfinite forward loss, or unexpected simulator failure | Stop and expose the cause. Fix it or document a versioned data/protocol change before retrying. |
+| Transient I/O failure | Retry only defined exceptions/statuses with timeouts, bounded backoff, and logs. Preserve operation identity. Prevent duplicate effects. Fail after exhaustion. |
+| Checkpoint write failure | Retry or save to an explicit, reported fallback destination. Preserve the last valid checkpoint. Never mark an incomplete save as resumable or successful. |
+| Evaluation failure | Retain planned IDs and outcomes. Count task failures per protocol. Mark unresolved infrastructure failures incomplete. Never present surviving cases as the full evaluation. |
+| OOM, backend fallback, or reduced workload | Record failed and replacement configurations. Treat batch size, precision, backend, environment count, or data changes as explicit experiment changes. |
+| Normal episode termination or documented AMP overflow | Follow the algorithm/framework behavior and record counts. |
 
-Keep restart and retry budgets in the experiment runner or scheduler. Do not retry deterministic failures indefinitely or restart from a suspect checkpoint. Preserve interruption semantics and do not swallow `KeyboardInterrupt` or `SystemExit`.
+Keep restart/retry budgets in the runner or scheduler. Do not repeat deterministic failures indefinitely or resume from suspect checkpoints. Preserve `KeyboardInterrupt` and `SystemExit`.
 
 ## Finish with evidence
 
-Report the checks performed, relevant results, unresolved failures, and the exact command/configuration used or proposed. Name skipped checks and their reason. Record the code revision and local changes, resolved config, seed/RNG setup, data and split identity, software/hardware/backend/precision, checkpoint lineage, and validation mode using the existing run metadata mechanism.
+Report commands, configuration, completed checks, results, unresolved failures, and skipped checks with reasons.
 
-For a requested launch, continue with the authorized run when the relevant checks pass. If they fail, fix the scoped cause and rerun the affected check; do not bypass the failure. When evidence or resources are unavailable, state the limitation without claiming the run is validated. Mark a still-running job as running and give its log/output location, not a completed result.
+Record revision/local changes, resolved configuration, data/split identity, seeds/RNGs, software/hardware/backend, precision, checkpoint lineage, and validation mode in existing run metadata.
+
+If a check fails, fix its scoped cause and repeat it. Continue the authorized run after checks pass. State missing evidence or resources. For active jobs, report running status and log/output location. Do not claim completion or validation without evidence.

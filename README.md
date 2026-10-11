@@ -30,7 +30,7 @@ The plugin tracks this repository, so the marketplace refresh also moves the ins
 
 ## Research code validation
 
-[research-code-validation](skills/research-code-validation/SKILL.md) applies when building or reviewing ML/RL research pipelines and before launching, resuming, or scaling training and evaluation. It covers boundary checks, staged validation, visible failures, and recovery that preserves experimental validity.
+[research-code-validation](skills/research-code-validation/SKILL.md) defines checks for ML/RL pipelines and experiment launches, resumes, and larger runs.
 
 Invoke it explicitly in Claude Code:
 
@@ -38,13 +38,13 @@ Invoke it explicitly in Claude Code:
 /berkeley-humanoids-skills:research-code-validation Check this training pipeline, run the relevant smoke checks, and then launch the requested experiment.
 ```
 
-The skill description supports automatic selection for relevant tasks. To make the expectation explicit in a consuming project's `CLAUDE.md` or `AGENTS.md`, add:
+Agents can select the skill automatically. Add this rule to the project's `CLAUDE.md` or `AGENTS.md`:
 
 ```text
 Use the research-code-validation skill when changing research training/evaluation pipelines and before launching or resuming their experiments. Run the cheapest relevant checks first, reuse still-valid results, and report unresolved failures before scaling up.
 ```
 
-Skill selection and project instructions guide the agent; they do not intercept every shell command. Put mandatory checks in the project's training entry point or runner so they also apply to manual and scheduled launches. See the official [skill invocation](https://code.claude.com/docs/en/skills#control-who-invokes-a-skill) and [hooks](https://code.claude.com/docs/en/hooks-guide) documentation for agent-side integration.
+Skill selection does not intercept every command. Put mandatory checks in the training entry point or runner, including manual and scheduled launches. See [skill invocation](https://code.claude.com/docs/en/skills#control-who-invokes-a-skill) and [hooks](https://code.claude.com/docs/en/hooks-guide).
 
 ## License
 
