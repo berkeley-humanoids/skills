@@ -6,7 +6,7 @@
     },
     "metadata": {
         "description": "For robotics and engineering related tasks.",
-        "version": "0.6.1"
+        "version": "0.7.0"
     },
     "plugins": [
         {
@@ -20,6 +20,7 @@
                 "./skills/grounded-research",
                 "./skills/paper-figures",
                 "./skills/pixi-workspace",
+                "./skills/research-code-validation",
                 "./skills/robotics-conventions",
                 "./skills/ros2-conventions",
                 "./skills/ste-writing"
