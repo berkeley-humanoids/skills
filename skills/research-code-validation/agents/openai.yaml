@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Code Validation"
+  short_description: "Validate training runs and research frameworks"
+  default_prompt: "Use $research-code-validation to validate this research pipeline before launching training."
