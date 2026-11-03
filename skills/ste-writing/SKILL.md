@@ -42,7 +42,7 @@ If the user gives no mode and the text tells a reader what to do, use strict. Ot
 
 ### Visual presentation
 
-- Prefer a visual explanation to a long prose description when it makes the point clearer. Keep simple facts and instructions in text.
+- Prefer a visual explanation to a long text description when it makes the point clearer. Keep simple facts and instructions in text.
 - Match the visual to the content: diagrams for relationships and designs, illustrations for concepts, and charts for quantitative results.
 - Use video for motion or change over time. Use interactive elements when readers need to explore behavior or compare scenarios.
 - Give each visual one clear purpose. Remove decoration and place labels near the relevant parts. Use a short caption to state the takeaway.
