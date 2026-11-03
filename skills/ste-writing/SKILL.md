@@ -40,6 +40,14 @@ If the user gives no mode and the text tells a reader what to do, use strict. Ot
 
 ## The rules
 
+### Visual presentation
+
+- When a visual explains a point more clearly than text, use the visual. Keep simple facts and instructions in text.
+- Use diagrams for relationships and designs, illustrations for concepts, and charts for numerical results.
+- Show motion or change over time in video. Let readers explore behavior or compare results with interactive examples.
+- Give each visual one clear purpose. Remove decoration. Place labels next to the parts they describe. State the main point in a short caption.
+- Describe each visual in text, including alternative text (alt text) for images. Keep essential facts and instructions available without video playback or interaction.
+
 ### Words
 
 - Use one name for one thing across the whole document. Never "repo" in one section and "repository" in the next, never "config file" then "settings file" for the same file.
@@ -68,6 +76,7 @@ If the user gives no mode and the text tells a reader what to do, use strict. Ot
 
 ### Sentences
 
+- Use the fewest words that preserve meaning. Write natural, direct sentences. Remove repeated information and empty phrases.
 - Write short, concrete sentences. Replace an abstract claim with a checkable one: "cache size affects performance" → state the direction, and give the numbers if you have them.
 - Put the condition before the command, separated by a comma: "If the port is in use, change the `--port` value."
 - Do not omit words to shorten a sentence. Keep subjects, verbs, and articles: "If enabled, the proxy..." → "If the flag is enabled, the proxy...". "Files not backed up" has two parses; "the files that are not backed up" has one.
