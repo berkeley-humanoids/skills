@@ -1,7 +1,6 @@
 ---
 name: unslop
 description: Cut AI tells from any writing.
-disable-model-invocation: true
 ---
 
 # Unslop
@@ -38,9 +37,3 @@ Rule numbers are stable ids that other skills cite. A removed rule leaves a gap.
 31. Use the plain word: "use", not "utilize" or "leverage".
 32. No metaphor, aphorism, personified code, or figurative verb where a literal phrase exists.
 33. Write whole sentences with their articles and verbs. Spell out arrows and abbreviations.
-
-## Source
-
-Adapted from [Cursor's pstack unslop skill](https://github.com/cursor/plugins/blob/main/pstack/skills/unslop/SKILL.md). The original rules and rule numbers are preserved.
-
-This skill retains the upstream [MIT License](LICENSE).
