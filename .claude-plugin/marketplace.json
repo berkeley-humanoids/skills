@@ -6,7 +6,7 @@
     },
     "metadata": {
         "description": "For robotics and engineering related tasks.",
-        "version": "0.7.0"
+        "version": "0.8.0"
     },
     "plugins": [
         {
@@ -23,7 +23,8 @@
                 "./skills/research-code-validation",
                 "./skills/robotics-conventions",
                 "./skills/ros2-conventions",
-                "./skills/ste-writing"
+                "./skills/ste-writing",
+                "./skills/unslop"
             ]
         }
     ]

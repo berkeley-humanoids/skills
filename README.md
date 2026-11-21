@@ -31,3 +31,5 @@ The plugin tracks this repository, so the marketplace refresh also moves the ins
 ## License
 
 CC0 1.0 Universal. See [LICENSE](LICENSE).
+
+The [unslop skill](skills/unslop/SKILL.md) is adapted from [Cursor's pstack plugin](https://github.com/cursor/plugins/blob/main/pstack/skills/unslop/SKILL.md) and retains its [MIT License](skills/unslop/LICENSE).
